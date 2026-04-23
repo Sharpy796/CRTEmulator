@@ -58,7 +58,7 @@ def apply_scanlines(img, interval, offset=0, vertical=False, color=(25,0,0),thic
 def overlayImages(img1,img2,weight1):
     return cv2.addWeighted(img1,weight1,img2,1-weight1, 0)
 
-def apply_crt_filter(filepath, scale = 1, scanlines=True):
+def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     img = cv2.imread(filepath)
     # Resize image
@@ -92,7 +92,8 @@ def apply_crt_filter(filepath, scale = 1, scanlines=True):
     # alpha = 0.05
     # offset division = 5
     
-    # img_crt = cv2.blur(img_crt, (2,1))
+    if blur:
+        img_crt = cv2.blur(img_crt, (2,1))
 
     # Apply horizontal scanlines
     if scanlines:
@@ -136,16 +137,18 @@ def apply_crt_filter(filepath, scale = 1, scanlines=True):
     # img_bilateral = cv2.bilateralFilter(img_crt,5,150,150)
     # img_bilateral = cv2.GaussianBlur(img_crt,(3,1),0.6)
     # img_crt = overlayImages(img_crt,img_bilateral,0)
+
+    # Resize back to original size
+    img_crt = cv2.resize(img_crt, (width,height), interpolation=cv2.INTER_NEAREST)
     # Save output
     cv2.imwrite('output/crt/'+filename+'.png',img_crt)
 
 # apply_crt_filter('assets/jpg/sonic.jpg')
 # apply_crt_filter('assets/png/sonic2.png')
-for image_path in os.listdir('assets\png'):
-    apply_crt_filter('assets/png/'+image_path,2,scanlines=False)
-for image_path in os.listdir('C:\\Program Files (x86)\\Steam\\steamapps\\common\\Noita\\mods\\GlimmersExpanded\\files\gfx\\ui_gfx'):
-    apply_crt_filter('C:/Program Files (x86)/Steam/steamapps/common/Noita/mods/GlimmersExpanded/files/gfx/ui_gfx/'+image_path,1/10,scanlines=False)
+for image_path in os.listdir('assets\\png'):
+    apply_crt_filter('assets/png/'+image_path,2)
 apply_crt_filter('assets/png/sonic2.png')
+apply_crt_filter('assets/png/celeste.png',6)
 # apply_crt_filter('assets/png/peach.png', 6, 2)
 
 
