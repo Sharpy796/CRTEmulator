@@ -63,6 +63,7 @@ def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     img = cv2.imread(filepath)
     # Resize image
     height, width = img.shape[:2]
+    print(filename,height,width)
     new_h, new_w = 0,0
     if 0 < scale and scale < 1 and type(scale) == float:
         new_h = (int)(height/scale)
@@ -92,18 +93,27 @@ def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     # alpha = 0.05
     # offset division = 5
     
-    if blur:
-        img_crt = cv2.blur(img_crt, (2,1))
+    # if blur:
+    #     img_crt = cv2.blur(img_crt, (2,1))
 
-    # Apply horizontal scanlines
-    if scanlines:
-        overlay = img_crt.copy()
-        num = 8
-        alpha = 0.05
-        for i in range(num+1):
-            temp = apply_scanlines(overlay,num,inplace=False,offset=num-i)
-            offset = (num-i)/12
-            img_crt = cv2.addWeighted(temp, alpha+offset, img_crt, 1-alpha-offset, 0)
+    # Apply basic scanlines
+    for i in range(height//2):
+        img_crt = cv2.line(img_crt, (0,i*2), (width,i*2),(0,0,0),1)
+    # Upscale to twice its regular resolution for subpixel detail
+    img_crt = cv2.resize(img_crt, (width*2,height*2), interpolation=cv2.INTER_NEAREST)
+    # Apply blur to simulate dithering
+    img_crt = cv2.GaussianBlur(img_crt,(7,1),1.5)
+    img_crt = cv2.GaussianBlur(img_crt,(1,3),0)
+
+    # # Apply horizontal scanlines
+    # if scanlines:
+    #     overlay = img_crt.copy()
+    #     num = 8
+    #     alpha = 0.05
+    #     for i in range(num+1):
+    #         temp = apply_scanlines(overlay,num,inplace=False,offset=num-i)
+    #         offset = (num-i)/12
+    #         img_crt = cv2.addWeighted(temp, alpha+offset, img_crt, 1-alpha-offset, 0)
     
 
     # Apply blur
@@ -139,16 +149,17 @@ def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     # img_crt = overlayImages(img_crt,img_bilateral,0)
 
     # Resize back to original size
-    img_crt = cv2.resize(img_crt, (width,height), interpolation=cv2.INTER_NEAREST)
+    # img_crt = cv2.resize(img_crt, (width,height), interpolation=cv2.INTER_NEAREST)
     # Save output
     cv2.imwrite('output/crt/'+filename+'.png',img_crt)
 
 # apply_crt_filter('assets/jpg/sonic.jpg')
 # apply_crt_filter('assets/png/sonic2.png')
-for image_path in os.listdir('assets\\png'):
-    apply_crt_filter('assets/png/'+image_path,2)
-apply_crt_filter('assets/png/sonic2.png')
-apply_crt_filter('assets/png/celeste.png',6)
+# for image_path in os.listdir('assets\\png'):
+#     apply_crt_filter('assets/png/'+image_path,2,scanlines=False)
+# apply_crt_filter('assets/png/sonic2.png')
+# apply_crt_filter('assets/png/celeste.png',6)
+apply_crt_filter('assets/png/super_metroid.png')
 # apply_crt_filter('assets/png/peach.png', 6, 2)
 
 
