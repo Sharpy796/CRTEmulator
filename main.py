@@ -5,6 +5,8 @@ import numpy as np
 from matplotlib import pyplot as plt
 import os
 import re
+from time import sleep
+from tqdm.auto import tqdm
 
 # Grab suitable images from gifs
 # for image_path in os.listdir('assets\gif'):
@@ -57,6 +59,14 @@ def apply_scanlines(img, interval, offset=0, vertical=False, color=(25,0,0),thic
 
 def overlayImages(img1,img2,weight1):
     return cv2.addWeighted(img1,weight1,img2,1-weight1, 0)
+
+def save_img(folder_path, img_name, img):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    cv2.imwrite(folder_path+'/'+img_name, img)
+
+def get_img_size(img):
+    return img.shape[:2] # height, width
 
 def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
@@ -151,7 +161,61 @@ def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     # Resize back to original size
     # img_crt = cv2.resize(img_crt, (width,height), interpolation=cv2.INTER_NEAREST)
     # Save output
-    cv2.imwrite('output/crt/'+filename+'.png',img_crt)
+    save_img('output/crt',filename+'.png',img_crt)
+
+def overlay_pixel(img1,y1,x1,img2,y2,x2,scale=1):
+    try:
+        img1[y1,x1] = min(255,img2[y2,x2]/scale+img1[y1,x1])
+    except:
+        pass
+
+def project_img(img, scale, channels=3, loadingbar_colour="white"):
+    height,width = get_img_size(img)
+    projection = np.zeros((height*scale,width*scale, channels), dtype=np.uint8)
+    sigma_y = 2
+    sigma_x = 3
+    sigma_a = 1
+    for h in tqdm(range(height),colour=loadingbar_colour,ascii=True):
+        for w in range(width):
+            overlay_pixel(projection,h*scale,w*scale-scale//2,img,h,w)
+            # LOOP FROM 0-(SCALE-1) FOR THIS AND BELOW
+            overlay_pixel(projection,h*scale,w*scale,img,h,w)
+
+            for x in range(0,scale+1):
+                for y in range(0,scale+1):
+                    if x==0 and y==0: continue
+                    overlay_pixel(projection,h*scale+y,w*scale-scale//2+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+                    overlay_pixel(projection,h*scale-y,w*scale-scale//2+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+                    overlay_pixel(projection,h*scale+y,w*scale-scale//2-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+                    overlay_pixel(projection,h*scale-y,w*scale-scale//2-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+
+                    overlay_pixel(projection,h*scale+y,w*scale+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+                    overlay_pixel(projection,h*scale-y,w*scale+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+                    overlay_pixel(projection,h*scale+y,w*scale-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+                    overlay_pixel(projection,h*scale-y,w*scale-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+    return projection
+
+def apply_crt_filter2(filepath):
+    filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
+    img = cv2.imread(filepath)
+    img_original = img.copy()
+    height,width = get_img_size(img)
+    height_new,width_new = height//2,width//2
+    img = cv2.resize(img, (width_new,height_new), interpolation=cv2.INTER_NEAREST)
+    blue,green,red = cv2.split(img)
+
+    print("starting projection...")
+    proj_blue = project_img(blue,4,1,"blue")
+    print("projected blue!")
+    proj_green = project_img(green,4,1,"green")
+    print("projected green!")
+    proj_red = project_img(red,4,1,"red")
+    print("projected red!")
+    img_crt = cv2.merge([proj_blue,proj_green,proj_red])
+
+    save_img('output/crt',filename+'.png',img_crt)
+
+
 
 # apply_crt_filter('assets/jpg/sonic.jpg')
 # apply_crt_filter('assets/png/sonic2.png')
@@ -159,8 +223,8 @@ def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
 #     apply_crt_filter('assets/png/'+image_path,2,scanlines=False)
 # apply_crt_filter('assets/png/sonic2.png')
 # apply_crt_filter('assets/png/celeste.png',6)
-apply_crt_filter('assets/png/super_metroid.png')
-# apply_crt_filter('assets/png/peach.png', 6, 2)
+# apply_crt_filter('assets/png/super_metroid.png')
+apply_crt_filter2('assets/png/super_metroid.png')
 
 
 # sqr_size = 5
