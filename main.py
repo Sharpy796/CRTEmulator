@@ -4,9 +4,11 @@ from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
 import os
+import math
 import re
 from time import sleep
 from tqdm.auto import tqdm
+from playsound3 import playsound
 
 # Grab suitable images from gifs
 # for image_path in os.listdir('assets\gif'):
@@ -63,7 +65,8 @@ def overlayImages(img1,img2,weight1):
 def save_img(folder_path, img_name, img):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
-    cv2.imwrite(folder_path+'/'+img_name, img)
+    cv2.imwrite(folder_path+"/"+img_name, img)
+    print("image saved at '"+folder_path+"/"+img_name+".png'")
 
 def get_img_size(img):
     return img.shape[:2] # height, width
@@ -163,40 +166,38 @@ def apply_crt_filter(filepath, scale = 1, blur=True, scanlines=True):
     # Save output
     save_img('output/crt',filename+'.png',img_crt)
 
-def overlay_pixel(img1,y1,x1,img2,y2,x2,scale=1):
+def overlay_pixel(img1,y1,x1,img2,y2,x2,xoff=0,yoff=0,divisor=1):
+    # gaussian = (math.e**(-(xoff**2+yoff**2)/(2*(sigma**2))))/(2*math.pi*(sigma**2))
+    y1 += yoff
+    x1 += xoff
     try:
-        img1[y1,x1] = min(255,img2[y2,x2]/scale+img1[y1,x1])
+        # img1[y1,x1] = min(255,img2[y2,x2]*gaussian+img1[y1,x1])
+        img1[y1,x1] = min(255,img2[y2,x2]/divisor+img1[y1,x1])
     except:
         pass
 
 def project_img(img, scale, channels=3, loadingbar_colour="white"):
     height,width = get_img_size(img)
     projection = np.zeros((height*scale,width*scale, channels), dtype=np.uint8)
-    sigma_y = 2
-    sigma_x = 3
-    sigma_a = 1
+    mod_x = 2 # 2
+    mod_y = 3 # 3x
+    mod_a = 2
     for h in tqdm(range(height),colour=loadingbar_colour,ascii=True):
-        for w in range(width):
-            overlay_pixel(projection,h*scale,w*scale-scale//2,img,h,w)
-            # LOOP FROM 0-(SCALE-1) FOR THIS AND BELOW
-            overlay_pixel(projection,h*scale,w*scale,img,h,w)
-
-            for x in range(0,scale+1):
-                for y in range(0,scale+1):
-                    if x==0 and y==0: continue
-                    overlay_pixel(projection,h*scale+y,w*scale-scale//2+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-                    overlay_pixel(projection,h*scale-y,w*scale-scale//2+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-                    overlay_pixel(projection,h*scale+y,w*scale-scale//2-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-                    overlay_pixel(projection,h*scale-y,w*scale-scale//2-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-
-                    overlay_pixel(projection,h*scale+y,w*scale+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-                    overlay_pixel(projection,h*scale-y,w*scale+x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-                    overlay_pixel(projection,h*scale+y,w*scale-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
-                    overlay_pixel(projection,h*scale-y,w*scale-x,img,h,w,x*sigma_x+y*sigma_y+sigma_a)
+        for w in range(width*scale):
+            for each in range(scale//2):
+                overlay_pixel(projection,h*scale+each,w,img,h,w//scale)
+                for x in range(0,scale): # FIXME: Get this part to not overlap
+                    for y in range(0,scale):
+                        if x==0 and y==0: continue
+                        overlay_pixel(projection,h*scale,w,img,h,w//scale, x, y,x*mod_x+y*mod_y+mod_a)
+                        overlay_pixel(projection,h*scale,w,img,h,w//scale, x,-y,x*mod_x+y*mod_y+mod_a)
+                        overlay_pixel(projection,h*scale,w,img,h,w//scale,-x, y,x*mod_x+y*mod_y+mod_a)
+                        overlay_pixel(projection,h*scale,w,img,h,w//scale,-x,-y,x*mod_x+y*mod_y+mod_a)
     return projection
 
-def apply_crt_filter2(filepath):
-    filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
+def apply_crt_filter2(filepath,filename=None):
+    if filename == None:
+        filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     img = cv2.imread(filepath)
     img_original = img.copy()
     height,width = get_img_size(img)
@@ -204,16 +205,18 @@ def apply_crt_filter2(filepath):
     img = cv2.resize(img, (width_new,height_new), interpolation=cv2.INTER_NEAREST)
     blue,green,red = cv2.split(img)
 
+    scale = 4
     print("starting projection...")
-    proj_blue = project_img(blue,4,1,"blue")
+    proj_blue = project_img(blue,scale,1,"blue")
     print("projected blue!")
-    proj_green = project_img(green,4,1,"green")
+    proj_green = project_img(green,scale,1,"green")
     print("projected green!")
-    proj_red = project_img(red,4,1,"red")
+    proj_red = project_img(red,scale,1,"red")
     print("projected red!")
     img_crt = cv2.merge([proj_blue,proj_green,proj_red])
 
     save_img('output/crt',filename+'.png',img_crt)
+    playsound('sounds/yougotmail.mp3')
 
 
 
@@ -224,7 +227,7 @@ def apply_crt_filter2(filepath):
 # apply_crt_filter('assets/png/sonic2.png')
 # apply_crt_filter('assets/png/celeste.png',6)
 # apply_crt_filter('assets/png/super_metroid.png')
-apply_crt_filter2('assets/png/super_metroid.png')
+apply_crt_filter2('assets/png/super_metroid.png','super_metroid')
 
 
 # sqr_size = 5
