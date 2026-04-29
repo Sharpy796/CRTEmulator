@@ -176,23 +176,46 @@ def overlay_pixel(img1,y1,x1,img2,y2,x2,xoff=0,yoff=0,divisor=1):
     except:
         pass
 
+def expand(img_to,y0,x0,yrange,xrange,img_from,y_from,x_from):
+    yscale  = 2
+    xscale  = 1
+    gamma   = 1
+    for y in range(min(yrange,1),max(0,yrange+1)):
+        for x in range(min(xrange,1),max(0,xrange+1)):
+            try:
+                img_to[y0+y,x0+x] += img_from[y_from,x_from]*(1/(abs(x)*xscale+abs(y)*yscale+gamma))
+            except: continue
+
+def project_pixel(img_to,y_to,x_to,img_from,y_from,x_from,scale):
+    for y in range(scale):
+        for x in range(scale):
+            if x==0:
+                if y==0:
+                    expand(img_to,y_to+y,x_to+x,-scale,-scale,img_from,y_from,x_from)
+                elif y==scale-1:
+                    expand(img_to,y_to+y,x_to+x,scale,-scale,img_from,y_from,x_from)
+                expand(img_to,y_to+y,x_to+x,0,-scale,img_from,y_from,x_from)
+            elif x==scale-1:
+                if y==0:
+                    expand(img_to,y_to+y,x_to+x,-scale,scale,img_from,y_from,x_from)
+                if y==scale-1:
+                    expand(img_to,y_to+y,x_to+x,scale,scale,img_from,y_from,x_from)
+                expand(img_to,y_to+y,x_to+x,0,scale,img_from,y_from,x_from)
+            if y==0:
+                expand(img_to,y_to+y,x_to+x,-scale,0,img_from,y_from,x_from)
+            elif y==scale-1:
+                expand(img_to,y_to+y,x_to+x,scale,0,img_from,y_from,x_from)
+            try:
+                img_to[y_to+y,x_to+x] += img_from[y_from,x_from]
+            except: continue
+# TODO: Colors are too bright
 def project_img(img, scale, channels=3, loadingbar_colour="white"):
     height,width = get_img_size(img)
-    projection = np.zeros((height*scale,width*scale, channels), dtype=np.uint8)
-    mod_x = 2 # 2
-    mod_y = 3 # 3x
-    mod_a = 2
-    for h in tqdm(range(height),colour=loadingbar_colour,ascii=True):
+    projection = np.zeros((height*scale,width*scale, channels), dtype=np.float32)
+    for h in tqdm(range(height),colour=loadingbar_colour,ascii=True,desc=f"Processing {loadingbar_colour}\t"):
+        # for w in tqdm(range(width*scale),ascii=True,leave=False,desc=f"Processing row {h}\t"):
         for w in range(width*scale):
-            for each in range(scale//2):
-                overlay_pixel(projection,h*scale+each,w,img,h,w//scale)
-                for x in range(0,scale): # FIXME: Get this part to not overlap
-                    for y in range(0,scale):
-                        if x==0 and y==0: continue
-                        overlay_pixel(projection,h*scale,w,img,h,w//scale, x, y,x*mod_x+y*mod_y+mod_a)
-                        overlay_pixel(projection,h*scale,w,img,h,w//scale, x,-y,x*mod_x+y*mod_y+mod_a)
-                        overlay_pixel(projection,h*scale,w,img,h,w//scale,-x, y,x*mod_x+y*mod_y+mod_a)
-                        overlay_pixel(projection,h*scale,w,img,h,w//scale,-x,-y,x*mod_x+y*mod_y+mod_a)
+            project_pixel(projection,h*scale,w,img,h,w//scale,scale//2)
     return projection
 
 def apply_crt_filter2(filepath,filename=None):
@@ -226,8 +249,7 @@ def apply_crt_filter2(filepath,filename=None):
 #     apply_crt_filter('assets/png/'+image_path,2,scanlines=False)
 # apply_crt_filter('assets/png/sonic2.png')
 # apply_crt_filter('assets/png/celeste.png',6)
-# apply_crt_filter('assets/png/super_metroid.png')
-apply_crt_filter2('assets/png/super_metroid.png','super_metroid')
+apply_crt_filter2('assets/png/super_metroid.png')
 
 
 # sqr_size = 5
