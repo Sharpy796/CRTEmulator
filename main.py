@@ -93,6 +93,7 @@ def create_gif2(folder_path,folder_path_save,filename,duration=20,gif=True,video
     frames = [Image.open(f).convert('RGB') for f in filenames]
 
     if gif:
+        print(f"Saving '{filename}.gif'...")
         # Stitch all frames side-by-side into one giant image to build a global palette
         combined = Image.new('RGB', (frames[0].width * len(frames), frames[0].height))
         for i, f in enumerate(frames):
@@ -115,13 +116,16 @@ def create_gif2(folder_path,folder_path_save,filename,duration=20,gif=True,video
             optimize=False,
             disposal=2
         )
+        print(f"Saved '{filename}.gif'!")
     
     if video:
+        print(f"Saving '{filename}.mp4'...")
         with iio.get_writer(f'{folder_path_save}/{filename}.mp4', fps=20, quality=8) as writer:
             for frame in frames:
                 writer.append_data(np.array(frame))
+        print(f"Saved '{filename}.mp4'!")
 
-def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale=3,verbose=False):
+def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale=3,verbose=False,sigma_y=1,sigma_x=4):
     if filename == None:
         filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     processed_images = []
@@ -140,6 +144,8 @@ def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale
                                                       downscale=downscale,
                                                       upscale=upscale,
                                                       verbose=verbose,
+                                                      sigma_y=sigma_y,
+                                                      sigma_x=sigma_x,
                                                       save=True))
     create_gif2(folder_path=f'output/crt/gif/{filename}/edited',
                 folder_path_save=f'output/crt/gif/{filename}',
@@ -153,17 +159,17 @@ def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale
 for img_path in tqdm(os.listdir('assets\\png'),ascii=True,desc='Processing PNGs',unit='images'):
     if not ('sonic2' in img_path or 'cinema' in img_path or 'celeste' in img_path or 'Earthworm' in img_path):
         apply_crt_filter2(f'assets/png/{img_path}',verbose=False)
-apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False)
-apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False)
-apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False)
+apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False,sigma_x=5)
+apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False,sigma_y=0.5,sigma_x=2)
+apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False,sigma_y=1.5)
 
 # 240p resolution filters - GIFS
 for gif_path in os.listdir('assets\\gif'):
     if 'cinema' not in gif_path:
         apply_crt_filter2_gif(f'assets/gif/{gif_path}')
-apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3)
+apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3,sigma_y=0.5,sigma_x=2)
 
-# # 480i resolution filters
+# 480i resolution filters
 apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame00',upscale=3,verbose=False,offset=False,sigma_x=2)
 apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame01',upscale=3,verbose=False,offset=True, sigma_x=2)
 create_gif2(folder_path=f'output/crt/gif/Earthworm_Jim_2_lvl1/edited',
