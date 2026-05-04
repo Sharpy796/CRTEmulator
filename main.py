@@ -9,6 +9,8 @@ import re
 from tqdm.auto import tqdm
 from playsound3 import playsound
 from scipy.ndimage import gaussian_filter
+import imageio as iio
+import glob
 
 # Grab suitable images from gifs
 # for image_path in os.listdir('assets\gif'):
@@ -17,11 +19,14 @@ from scipy.ndimage import gaussian_filter
 #         im.save('assets/png/{}.png'.format(image_path.replace(".gif","")))
 
 # FUNCTIONS
-def save_img(folder_path, img_name, img, verbose=True):
+def create_dir(folder_path):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
-    cv2.imwrite(folder_path+"/"+img_name, img)
-    if verbose: print("image saved at '"+folder_path+"/"+img_name+"'")
+
+def save_img(folder_path, img_name, img, verbose=True):
+    create_dir(folder_path)
+    cv2.imwrite(f'{folder_path}/{img_name}', img)
+    if verbose: print(f"image saved at '{folder_path}/{img_name}'")
 
 def get_img_size(img):
     return img.shape[:2] # height, width
@@ -49,19 +54,19 @@ def project_img(img, upscale, color, offset=False):
     upscaled = upscaled.astype(np.float32)
     
     sigma_y = 1
-    sigma_x = 5/4
+    sigma_x = 4 #5/4
     
     blended = np.zeros_like(upscaled)
     blended[:, :] = gaussian_filter(upscaled[:, :], sigma=(sigma_y,sigma_x))
 
-    projection = np.minimum(255.0, np.maximum(upscaled, blended*4))
+    projection = np.minimum(255.0, np.maximum(upscaled, blended*5))
 
     return projection.astype(np.float32)
 
 def playsoundfinished():
     playsound('sounds/yougotmail.mp3')
 
-def apply_crt_filter2(filepath=None,img=None,filename=None,downscale=1,upscale=3,verbose=True,save=True,sound=False,offset=False):
+def apply_crt_filter2(filepath=None,filepath_save='output/crt/png',img=None,filename=None,downscale=1,upscale=3,verbose=True,save=True,sound=False,offset=False):
     if filename == None and filepath != None:
         filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     if img is None:
@@ -81,77 +86,94 @@ def apply_crt_filter2(filepath=None,img=None,filename=None,downscale=1,upscale=3
     if verbose: print("projected red!")
     img_crt = cv2.merge([proj_blue,proj_green,proj_red])
 
-    if save: save_img('output/crt',filename+'.png',img_crt,verbose)
+    if save:
+        save_img(filepath_save,f'{filename}.png',img_crt,verbose)
     if sound: playsoundfinished()
-    return cv2.merge([proj_red,proj_green,proj_blue]) # returns RGB
+    return cv2.merge([proj_blue,proj_green,proj_red]) # returns BGR
 
-def create_gif(img_arr, filepath, duration=20, disposal=2):
-    frames = [Image.fromarray(img.astype(np.uint8), 'RGB') for img in img_arr]
-    
-    # Build a global palette by quantizing a composite of all frames
-    combined = Image.new('RGB', (frames[0].width, frames[0].height * len(frames)))
-    for i, frame in enumerate(frames):
-        combined.paste(frame, (0, i * frames[0].height))
-    
-    palette_source = combined.quantize(colors=256, method=Image.Quantize.MEDIANCUT)
-    
-    # Apply that single palette to every frame
-    quantized_frames = [frame.quantize(palette=palette_source, dither=0) for frame in frames]
-    
-    quantized_frames[0].save(
-        filepath,
-        save_all=True,
-        append_images=quantized_frames[1:],
-        duration=duration,
-        loop=0,
-        optimize=False,  # Don't let Pillow mess with the palette
-        disposal=0  # ← Clear to background before each frame
-    )
+def create_gif2(folder_path,folder_path_save,filename,duration=20,gif=True,video=False):
+    filenames = sorted(glob.glob(f'{folder_path}/*.png'))
+    frames = [Image.open(f).convert('RGB') for f in filenames]
 
-# def create_gif(img_arr,filepath,duration=20):
-#     gif = [Image.fromarray(img.astype(np.uint8),'RGB') for img in img_arr]
-#     gif[0].save(filepath, save_all=True, append_images=gif[1:], duration=duration, loop=0)
+    if gif:
+        # Stitch all frames side-by-side into one giant image to build a global palette
+        combined = Image.new('RGB', (frames[0].width * len(frames), frames[0].height))
+        for i, f in enumerate(frames):
+            combined.paste(f, (i * f.width, 0))
+
+        # Derive the global palette from the combined image
+        palette_source = combined.quantize(colors=256, method=Image.Quantize.FASTOCTREE)
+
+        # Make sure all frames are in RGB format and not RGBA
+        frames = [f.convert('RGB') for f in frames]
+        # Now quantize every frame against that palette
+        quantized = [f.quantize(colors=256, palette=palette_source, dither=0) for f in frames]
+
+        quantized[0].save(
+            f'{folder_path_save}/{filename}.gif',
+            save_all=True,
+            append_images=quantized[1:],
+            loop=0,
+            duration=duration,
+            optimize=False,
+            disposal=2
+        )
+    
+    if video:
+        with iio.get_writer(f'{folder_path_save}/{filename}.mp4', fps=20, quality=8) as writer:
+            for frame in frames:
+                writer.append_data(np.array(frame))
 
 def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale=3,verbose=False):
     if filename == None:
         filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     processed_images = []
-    duration,disposal = 0,None
+    duration = 0
     with Image.open(filepath) as im:
         im.seek(min(im.n_frames,3))
         duration = im.info['duration']
-        disposal = im.disposal_method
-        
-        if not os.path.exists('output/crt/gif/'+filename):
-            os.makedirs('output/crt/gif/'+filename)
-        for frame in tqdm(range(im.n_frames),ascii=True,desc="Processing "+filename+'.gif'):
+        create_dir(f'output/crt/gif/{filename}/clean')
+        create_dir(f'output/crt/gif/{filename}/edited')
+        for frame in tqdm(range(im.n_frames),ascii=True,desc=f"Processing '{filename}.gif'",unit='frames'):
             im.seek(frame)
-            im.save('output/crt/gif/'+filename+'/frame'+str(frame)+'.png',optimize=False)
-            processed_images.append(apply_crt_filter2('output/crt/gif/'+filename+'/frame'+str(frame)+'.png',img=img,filename=filename,downscale=downscale,upscale=upscale,verbose=verbose,save=False))
-    create_gif(processed_images,'output/crt/gif/'+filename+'.gif',duration=duration,disposal=disposal)
+            im.save(f'output/crt/gif/{filename}/clean/frame{frame:03d}.png',optimize=False)
+            processed_images.append(apply_crt_filter2(filepath=f'output/crt/gif/{filename}/clean/frame{frame:03d}.png',
+                                                      filepath_save=f'output/crt/gif/{filename}/edited',
+                                                      filename=f'frame{frame:03d}',
+                                                      downscale=downscale,
+                                                      upscale=upscale,
+                                                      verbose=verbose,
+                                                      save=True))
+    create_gif2(folder_path=f'output/crt/gif/{filename}/edited',
+                folder_path_save=f'output/crt/gif/{filename}',
+                filename=filename,
+                duration=duration)
 
 
 
 # IMAGE FILTERING
 # 240p resolution filters
-# for image_path in tqdm(os.listdir('assets\\png'),ascii=True):
-#     apply_crt_filter2('assets/png/'+image_path,verbose=False)
-# apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False)
-# apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False)
-# apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False,sound=True)
+for img_path in tqdm(os.listdir('assets\\png'),ascii=True,desc='Processing PNGs',unit='images'):
+    if not ('sonic2' in img_path or 'cinema' in img_path or 'celeste' in img_path or 'Earthworm' in img_path):
+        apply_crt_filter2(f'assets/png/{img_path}',verbose=False)
+apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False)
+apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False)
+apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False)
 
-# 240p resolution filters - GIFS
-apply_crt_filter2_gif('assets/gif/super_metroid.gif',verbose=False)
-apply_crt_filter2_gif('assets/gif/super_bomberman_5.gif',verbose=False)
+# # 240p resolution filters - GIFS
+for gif_path in os.listdir('assets\\gif'):
+    if 'cinema' not in gif_path:
+        apply_crt_filter2_gif(f'assets/gif/{gif_path}')
 apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3)
 
-# 480i resolution filters
-# frame1 = apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filename='Earthworm_Jim_2_lvl1_frame1',upscale=3,verbose=False,offset=False)
-# frame2 = apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filename='Earthworm_Jim_2_lvl1_frame2',upscale=3,verbose=False,offset=True)
-# gif = [frame1,frame2]
-# create_gif(gif,'output/crt/gif/Earthworm_Jim_2_lvl1.gif')
+# # 480i resolution filters
+apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame00',upscale=3,verbose=False,offset=False)
+apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame01',upscale=3,verbose=False,offset=True)
+create_gif2(folder_path=f'output/crt/gif/Earthworm_Jim_2_lvl1/edited',
+            folder_path_save=f'output/crt/gif/Earthworm_Jim_2_lvl1',
+            filename='Earthworm_Jim_2_lvl1',
+            duration=20)
 
-# TODO: Create gifs
 playsoundfinished()
 print("Images filtered!")
 
