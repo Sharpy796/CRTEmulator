@@ -23,7 +23,7 @@ def create_dir(folder_path):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-def save_img(folder_path, img_name, img, verbose=True):
+def save_img(folder_path,img_name,img,verbose=True):
     create_dir(folder_path)
     cv2.imwrite(f'{folder_path}/{img_name}', img)
     if verbose: print(f"image saved at '{folder_path}/{img_name}'")
@@ -31,7 +31,7 @@ def save_img(folder_path, img_name, img, verbose=True):
 def get_img_size(img):
     return img.shape[:2] # height, width
 
-def project_img(img, upscale, color, offset=False):
+def project_img(img,upscale,color,offset=False,sigma_y=1,sigma_x=4):
     height, width = get_img_size(img)
 
     upscaled = np.repeat(np.repeat(img[:, :], upscale, axis=0), upscale, axis=1)
@@ -53,9 +53,6 @@ def project_img(img, upscale, color, offset=False):
     upscaled = upscaled.transpose()
     upscaled = upscaled.astype(np.float32)
     
-    sigma_y = 1
-    sigma_x = 4 #5/4
-    
     blended = np.zeros_like(upscaled)
     blended[:, :] = gaussian_filter(upscaled[:, :], sigma=(sigma_y,sigma_x))
 
@@ -66,7 +63,7 @@ def project_img(img, upscale, color, offset=False):
 def playsoundfinished():
     playsound('sounds/yougotmail.mp3')
 
-def apply_crt_filter2(filepath=None,filepath_save='output/crt/png',img=None,filename=None,downscale=1,upscale=3,verbose=True,save=True,sound=False,offset=False):
+def apply_crt_filter2(filepath=None,filepath_save='output/crt/png',img=None,filename=None,downscale=1,upscale=3,verbose=True,save=True,sound=False,offset=False,sigma_y=1,sigma_x=4):
     if filename == None and filepath != None:
         filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     if img is None:
@@ -78,11 +75,11 @@ def apply_crt_filter2(filepath=None,filepath_save='output/crt/png',img=None,file
     blue,green,red = cv2.split(img)
 
     if verbose: print("starting projection...")
-    proj_blue = project_img(blue,upscale,"blue",offset)
+    proj_blue = project_img(blue,upscale,"blue",offset,sigma_y,sigma_x)
     if verbose: print("projected blue!")
-    proj_green = project_img(green,upscale,"green",offset)
+    proj_green = project_img(green,upscale,"green",offset,sigma_y,sigma_x)
     if verbose: print("projected green!")
-    proj_red = project_img(red,upscale,"red",offset)
+    proj_red = project_img(red,upscale,"red",offset,sigma_y,sigma_x)
     if verbose: print("projected red!")
     img_crt = cv2.merge([proj_blue,proj_green,proj_red])
 
@@ -160,15 +157,15 @@ apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False)
 apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False)
 apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False)
 
-# # 240p resolution filters - GIFS
+# 240p resolution filters - GIFS
 for gif_path in os.listdir('assets\\gif'):
     if 'cinema' not in gif_path:
         apply_crt_filter2_gif(f'assets/gif/{gif_path}')
 apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3)
 
 # # 480i resolution filters
-apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame00',upscale=3,verbose=False,offset=False)
-apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame01',upscale=3,verbose=False,offset=True)
+apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame00',upscale=3,verbose=False,offset=False,sigma_x=2)
+apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame01',upscale=3,verbose=False,offset=True, sigma_x=2)
 create_gif2(folder_path=f'output/crt/gif/Earthworm_Jim_2_lvl1/edited',
             folder_path_save=f'output/crt/gif/Earthworm_Jim_2_lvl1',
             filename='Earthworm_Jim_2_lvl1',
