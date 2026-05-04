@@ -157,11 +157,13 @@ def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale
 # IMAGE FILTERING
 # 240p resolution filters
 for img_path in tqdm(os.listdir('assets\\png'),ascii=True,desc='Processing PNGs',unit='images'):
-    if not ('sonic2' in img_path or 'cinema' in img_path or 'celeste' in img_path or 'Earthworm' in img_path):
+    if not ('sonic2' in img_path or 'cinema' in img_path or 'celeste' in img_path or 'Earthworm' in img_path or 'presentation' in img_path):
         apply_crt_filter2(f'assets/png/{img_path}',verbose=False)
 apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False,sigma_x=5)
 apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False,sigma_y=0.5,sigma_x=2)
 apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False,sigma_y=1.5)
+apply_crt_filter2('assets/png/presentation_screenshot.png',verbose=False,downscale=4,sigma_x=4,sigma_y=1.5,offset=False)
+apply_crt_filter2('assets/png/presentation_screenshot_username.png',verbose=False,downscale=4,sigma_x=4,sigma_y=1.5,offset=False)
 
 # 240p resolution filters - GIFS
 for gif_path in os.listdir('assets\\gif'):
