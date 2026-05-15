@@ -35,27 +35,29 @@ def project_img(img,upscale,color,offset=False,sigma_y=1,sigma_x=4):
 
     upscaled = np.repeat(np.repeat(img[:, :], upscale, axis=0), upscale, axis=1)
     for each in range(height//2):
-        upscaled[upscale*offset+2*each*upscale] = np.zeros((1,width*upscale))
-        upscaled[upscale*offset+2*each*upscale+1] = np.zeros((1,width*upscale))
-        upscaled[upscale*offset+2*each*upscale+2] = np.zeros((1,width*upscale))
+        for i in range(upscale):
+            upscaled[upscale*offset+2*each*upscale+i] = np.zeros((1,width*upscale))
     upscaled = upscaled.transpose()
     for each in range(width):
         if color == "red":
-            upscaled[each*upscale+(upscale-2)] = np.zeros((1,height*upscale))
-            upscaled[each*upscale+(upscale-1)] = np.zeros((1,height*upscale))
+            for i in range(upscale//3):
+                upscaled[each*upscale+i+(upscale//3)] = np.zeros((1,height*upscale))
+                upscaled[each*upscale+i+(upscale//3)*2] = np.zeros((1,height*upscale))
         if color == "green":
-            upscaled[each*upscale] = np.zeros((1,height*upscale))
-            upscaled[each*upscale+(upscale-1)] = np.zeros((1,height*upscale))
+            for i in range(upscale//3):
+                upscaled[each*upscale+i] = np.zeros((1,height*upscale))
+                upscaled[each*upscale+i+(upscale//3)*2] = np.zeros((1,height*upscale))
         if color == "blue":
-            upscaled[each*upscale] = np.zeros((1,height*upscale))
-            upscaled[each*upscale+(upscale-2)] = np.zeros((1,height*upscale))
+            for i in range(upscale//3):
+                upscaled[each*upscale+i] = np.zeros((1,height*upscale))
+                upscaled[each*upscale+i+(upscale//3)] = np.zeros((1,height*upscale))
     upscaled = upscaled.transpose()
     upscaled = upscaled.astype(np.float32)
     
     blended = np.zeros_like(upscaled)
-    blended[:, :] = gaussian_filter(upscaled[:, :], sigma=(sigma_y,sigma_x))
+    blended[:, :] = gaussian_filter(upscaled[:, :], sigma=(sigma_y*(upscale/3),sigma_x*(upscale/3)))
 
-    projection = np.minimum(255.0, np.maximum(upscaled, blended*5))
+    projection = np.minimum(255.0, np.maximum(upscaled*0.8, blended*5))
 
     return projection.astype(np.float32)
 
@@ -81,11 +83,12 @@ def apply_crt_filter2(filepath=None,filepath_save='output/crt/png',img=None,file
     proj_red = project_img(red,upscale,"red",offset,sigma_y,sigma_x)
     if verbose: print("projected red!")
     img_crt = cv2.merge([proj_blue,proj_green,proj_red])
+    # img_crt = proj_red
 
     if save:
         save_img(filepath_save,f'{filename}.png',img_crt,verbose)
     if sound: playsoundfinished()
-    return cv2.merge([proj_blue,proj_green,proj_red]) # returns BGR
+    return img_crt
 
 def create_gif2(folder_path,folder_path_save,filename,duration=20,gif=True,video=False):
     filenames = sorted(glob.glob(f'{folder_path}/*.png'))
@@ -124,17 +127,18 @@ def create_gif2(folder_path,folder_path_save,filename,duration=20,gif=True,video
                 writer.append_data(np.array(frame))
         print(f"Saved '{filename}.mp4'!")
 
-def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale=3,verbose=False,sigma_y=1,sigma_x=4):
+def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale=3,verbose=False,sigma_y=1,sigma_x=4,duration=-1,offset=False,interlace=False):
     if filename == None:
         filename = re.sub(r'(^.*/)|(\..*)', '', filepath)
     processed_images = []
-    duration = 0
     with Image.open(filepath) as im:
-        im.seek(min(im.n_frames,3))
-        duration = im.info['duration']
+        im.seek(min(im.n_frames,1))
+        # if duration < 0: duration = im.info['duration']
+        if duration < 0: duration = im.n_frames
         create_dir(f'output/crt/gif/{filename}/clean')
         create_dir(f'output/crt/gif/{filename}/edited')
         for frame in tqdm(range(im.n_frames),ascii=True,desc=f"Processing '{filename}.gif'",unit='frames'):
+            if interlace: offset = frame%2
             im.seek(frame)
             im.save(f'output/crt/gif/{filename}/clean/frame{frame:03d}.png',optimize=False)
             processed_images.append(apply_crt_filter2(filepath=f'output/crt/gif/{filename}/clean/frame{frame:03d}.png',
@@ -145,7 +149,8 @@ def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale
                                                       verbose=verbose,
                                                       sigma_y=sigma_y,
                                                       sigma_x=sigma_x,
-                                                      save=True))
+                                                      save=True,
+                                                      offset=offset))
     create_gif2(folder_path=f'output/crt/gif/{filename}/edited',
                 folder_path_save=f'output/crt/gif/{filename}',
                 filename=filename,
@@ -154,31 +159,37 @@ def apply_crt_filter2_gif(filepath="",img=None,filename=None,downscale=1,upscale
 
 
 # IMAGE FILTERING
-# 240p resolution filters
-for img_path in tqdm(os.listdir('assets\\png'),ascii=True,desc='Processing PNGs',unit='images'):
-    if not ('sonic2' in img_path or 'cinema' in img_path or 'celeste' in img_path or 'Earthworm' in img_path or 'presentation' in img_path):
-        apply_crt_filter2(f'assets/png/{img_path}',verbose=False)
-apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False,sigma_x=5)
-apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False,sigma_y=0.5,sigma_x=2)
-apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False,sigma_y=1.5)
-apply_crt_filter2('assets/png/presentation_screenshot.png',verbose=False,downscale=4,sigma_x=4,sigma_y=1.5,offset=False)
-apply_crt_filter2('assets/png/presentation_screenshot_username.png',verbose=False,downscale=4,sigma_x=4,sigma_y=1.5,offset=False)
+# # 240p resolution filters
+# for img_path in tqdm(os.listdir('assets\\png'),ascii=True,desc='Processing PNGs',unit='images'):
+#     if not ('sonic2' in img_path or 'cinema' in img_path or 'celeste' in img_path or 'Earthworm' in img_path or 'presentation' in img_path):
+#         apply_crt_filter2(f'assets/png/{img_path}',verbose=False)
+# apply_crt_filter2('assets/png/sonic2.png',downscale=0.5,verbose=False,sigma_x=5)
+# apply_crt_filter2('assets/png/cinema.png',downscale=5,verbose=False,sigma_y=0.5,sigma_x=2)
+# apply_crt_filter2('assets/png/celeste.png',downscale=3,upscale=3,verbose=False,sigma_y=1.5)
+# apply_crt_filter2('assets/png/presentation_screenshot.png',verbose=False,downscale=4,sigma_x=4,sigma_y=1.5,offset=False)
+# apply_crt_filter2('assets/png/presentation_screenshot_username.png',verbose=False,downscale=4,sigma_x=4,sigma_y=1.5,offset=False)
 
-# 240p resolution filters - GIFS
-for gif_path in os.listdir('assets\\gif'):
-    if 'cinema' not in gif_path:
-        apply_crt_filter2_gif(f'assets/gif/{gif_path}')
-apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3,sigma_y=0.5,sigma_x=2)
+# # 240p resolution filters - GIFS
+# for gif_path in os.listdir('assets\\gif'):
+#     if 'cinema' not in gif_path:
+#         apply_crt_filter2_gif(f'assets/gif/{gif_path}')
+# apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3,sigma_y=1.25,sigma_x=1.1,duration=60,upscale=9)
+# apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3,sigma_y=1.5,sigma_x=1.7,duration=35,upscale=3,interlace=True)
+apply_crt_filter2_gif('assets/gif/cinema.gif',downscale=3,sigma_y=1.5,sigma_x=1.7,duration=40,upscale=3,interlace=True)
+apply_crt_filter2_gif('assets/gif/cinema_old.gif',downscale=3,sigma_y=1.5,sigma_x=1.7,upscale=3,interlace=True)
+# apply_crt_filter2('assets/png/cinema.png',downscale=3,sigma_y=1.25,sigma_x=1.5,upscale=3)
+# apply_crt_filter2('assets/png/super_metroid.png',filename='super_metroid_after',upscale=12,sigma_y=1.2,sigma_x=1.4)
+# apply_crt_filter2('assets/png/super_metroid.png',filename='super_metroid_after')
 
-# 480i resolution filters
-apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame00',upscale=3,verbose=False,offset=False,sigma_x=2)
-apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame01',upscale=3,verbose=False,offset=True, sigma_x=2)
-create_gif2(folder_path=f'output/crt/gif/Earthworm_Jim_2_lvl1/edited',
-            folder_path_save=f'output/crt/gif/Earthworm_Jim_2_lvl1',
-            filename='Earthworm_Jim_2_lvl1',
-            duration=20)
+# # 480i resolution filters
+# apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame00',upscale=3,verbose=False,offset=False,sigma_x=2)
+# apply_crt_filter2('assets/png/Earthworm_Jim_2_lvl1.png',filepath_save='output/crt/gif/Earthworm_Jim_2_lvl1/edited',filename='frame01',upscale=3,verbose=False,offset=True, sigma_x=2)
+# create_gif2(folder_path=f'output/crt/gif/Earthworm_Jim_2_lvl1/edited',
+#             folder_path_save=f'output/crt/gif/Earthworm_Jim_2_lvl1',
+#             filename='Earthworm_Jim_2_lvl1',
+#             duration=20)
 
-playsoundfinished()
+# playsoundfinished()
 print("Images filtered!")
 
 # %%
